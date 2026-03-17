@@ -1,18 +1,19 @@
 import jwt from "jsonwebtoken";
+import { JWT_SECRET as secret } from "../configs/env.js";
 
-const isAuthenticated = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "unauthorized" });
-  }
-  const token = authHeader.split(" ")[1];
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) return res.status(401).json({ message: "Access Denied" });
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, secret);
     req.user = decoded;
     next();
-  } catch (error) {
-    return res.status(401).json({ message: "unauthorized" });
+  } catch (err) {
+    res.status(403).json({ message: "Invalid Token" });
   }
-};
+}
 
-export { isAuthenticated };
+export default authenticateToken;
