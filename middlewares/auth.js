@@ -16,4 +16,23 @@ function authenticateToken(req, res, next) {
   }
 }
 
+export function authorizeRoles(...allowedRoles) {
+  return function roleGuard(req, res, next) {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized. Missing authenticated user" });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        message:
+          "Forbidden. You do not have permission to access this resource",
+      });
+    }
+
+    next();
+  };
+}
+
 export default authenticateToken;
