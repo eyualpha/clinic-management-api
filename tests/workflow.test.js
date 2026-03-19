@@ -5,6 +5,7 @@ import request from "supertest";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test_secret";
+process.env.NODE_ENV = "test";
 
 import createApp from "../app.js";
 import Doctor from "../models/doctor.js";
@@ -213,5 +214,45 @@ describe("Clinic workflow integration", () => {
     assert.ok(Array.isArray(history.body.medicalHistory));
     assert.ok(history.body.medicalHistory.length >= 1);
     assert.equal(history.body.recordsCount, history.body.medicalHistory.length);
+  });
+
+  it("allows receptionist password reset using OTP", async () => {
+    const requestOtp = await request(app)
+      .post("/api/auth/password-reset/request-otp")
+      .send({ email: "reception1@clinic.local" });
+
+    assert.equal(requestOtp.status, 200);
+    assert.ok(requestOtp.body.otp);
+
+    const verifyOtp = await request(app)
+      .post("/api/auth/password-reset/verify-otp")
+      .send({
+        email: "reception1@clinic.local",
+        otp: requestOtp.body.otp,
+      });
+
+    assert.equal(verifyOtp.status, 200);
+
+    const reset = await request(app)
+      .post("/api/auth/password-reset/reset")
+      .send({
+        email: "reception1@clinic.local",
+        otp: requestOtp.body.otp,
+        newPassword: "Reception@456",
+      });
+
+    assert.equal(reset.status, 200);
+
+    const oldPasswordLogin = await request(app).post("/api/auth/login").send({
+      email: "reception1@clinic.local",
+      password: "Reception@123",
+    });
+    assert.equal(oldPasswordLogin.status, 401);
+
+    const newPasswordLogin = await request(app).post("/api/auth/login").send({
+      email: "reception1@clinic.local",
+      password: "Reception@456",
+    });
+    assert.equal(newPasswordLogin.status, 200);
   });
 });

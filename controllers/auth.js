@@ -1,10 +1,14 @@
 import bcrypt from "bcrypt";
+import { createHash, randomInt } from "node:crypto";
 import jwt from "jsonwebtoken";
 import Doctor from "../models/doctor.js";
 import User from "../models/user.js";
 import { JWT_SECRET as secret } from "../configs/env.js";
+import { sendResetOtpEmail } from "../utils/sendEmail.js";
 
 const INTERNAL_ROLES = ["admin", "doctor", "receptionist"];
+const PASSWORD_RESET_ROLES = ["doctor", "receptionist"];
+const OTP_EXPIRY_MINUTES = 10;
 
 function canBootstrapAdmin(totalUsers, role) {
   return totalUsers === 0 && role === "admin";
@@ -28,6 +32,144 @@ function sanitizeUser(user) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
+}
+
+function generateOtp() {
+  return String(randomInt(100000, 1000000));
+}
+
+function hashOtp(otp) {
+  return createHash("sha256").update(String(otp)).digest("hex");
+}
+
+function isOtpExpired(expiresAt) {
+  return !expiresAt || new Date(expiresAt).getTime() < Date.now();
+}
+
+export async function requestPasswordResetOtp(req, res) {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({
+      email: normalizedEmail,
+      role: { $in: PASSWORD_RESET_ROLES },
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "User not found or role is not eligible" });
+    }
+
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    user.passwordResetOtpHash = hashOtp(otp);
+    user.passwordResetOtpExpiresAt = expiresAt;
+    await user.save();
+
+    await sendResetOtpEmail(user.email, otp);
+
+    return res.status(200).json({
+      message: "Password reset OTP sent successfully",
+      expiresInMinutes: OTP_EXPIRY_MINUTES,
+      ...(process.env.NODE_ENV === "test" ? { otp } : {}),
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "Failed to send password reset OTP",
+      error: err.message,
+    });
+  }
+}
+
+export async function verifyPasswordResetOtp(req, res) {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({
+      email: normalizedEmail,
+      role: { $in: PASSWORD_RESET_ROLES },
+    });
+
+    if (!user || !user.passwordResetOtpHash) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (isOtpExpired(user.passwordResetOtpExpiresAt)) {
+      return res.status(400).json({ message: "OTP has expired" });
+    }
+
+    const providedOtpHash = hashOtp(otp);
+    if (providedOtpHash !== user.passwordResetOtpHash) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    return res.status(200).json({ message: "OTP verified successfully" });
+  } catch (err) {
+    return res.status(500).json({
+      message: "Failed to verify OTP",
+      error: err.message,
+    });
+  }
+}
+
+export async function resetPassword(req, res) {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        message: "Email, OTP and newPassword are required",
+      });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({
+        message: "newPassword must be at least 6 characters long",
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({
+      email: normalizedEmail,
+      role: { $in: PASSWORD_RESET_ROLES },
+    });
+
+    if (!user || !user.passwordResetOtpHash) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (isOtpExpired(user.passwordResetOtpExpiresAt)) {
+      return res.status(400).json({ message: "OTP has expired" });
+    }
+
+    const providedOtpHash = hashOtp(otp);
+    if (providedOtpHash !== user.passwordResetOtpHash) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.passwordResetOtpHash = null;
+    user.passwordResetOtpExpiresAt = null;
+    await user.save();
+
+    return res.status(200).json({
+      message: "Password reset successful",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "Failed to reset password",
+      error: err.message,
+    });
+  }
 }
 
 export async function bootstrapAdmin(req, res) {

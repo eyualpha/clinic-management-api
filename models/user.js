@@ -16,6 +16,16 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "doctor", "receptionist"],
       required: true,
     },
+
+    passwordResetOtpHash: {
+      type: String,
+      default: null,
+    },
+
+    passwordResetOtpExpiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

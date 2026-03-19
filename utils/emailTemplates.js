@@ -1,4 +1,4 @@
-const PasswordResetOtpEmail = (otp) => {
+export const PasswordResetOtpEmail = (otp) => {
   return `
   <!DOCTYPE html>
   <html lang="en">
@@ -68,7 +68,7 @@ const PasswordResetOtpEmail = (otp) => {
   <body>
     <div class="container">
       <div class="header">
-        <h1>ASTUECSF CHOIR</h1>
+        <h1>Dental Clinic</h1>
       </div>
       <div class="content">
         <p>Hello,</p>
@@ -77,14 +77,10 @@ const PasswordResetOtpEmail = (otp) => {
         <p>This code expires in 10 minutes. If you did not request a password reset, you can safely ignore this email.</p>
       </div>
       <div class="footer">
-        &copy; ${new Date().getFullYear()} ASTUECSF CHOIR. All rights reserved.
+        &copy; ${new Date().getFullYear()} Dental Clinic. All rights reserved.
       </div>
     </div>
   </body>
   </html>
   `;
-};
-
-export default {
-  PasswordResetOtpEmail,
 };

@@ -1,24 +1,14 @@
 import transporter from "../configs/nodemailer.js";
 import { PasswordResetOtpEmail } from "./emailTemplates.js";
 
-import { EMAIL_USER } from "../configs/env.js";
+import { EMAIL_PASS, EMAIL_USER } from "../configs/env.js";
 
-const sendEmail = async (email, subject, text) => {
-  const htmlContent = sendTemporaryPasswordEmail(subject, text);
-  const mailOptions = {
-    from: '"Dental Clinic" <' + EMAIL_USER + ">",
-    to: email,
-    subject: subject,
-    html: htmlContent,
-  };
+export const sendResetOtpEmail = async (email, otp) => {
+  if (!EMAIL_USER || !EMAIL_PASS || process.env.NODE_ENV === "test") {
+    // Skip real SMTP in test or when credentials are not configured.
+    return true;
+  }
 
-  await transporter.sendMail(mailOptions);
-  console.log(`OTP email sent to ${email}`);
-
-  return true;
-};
-
-const sendResetOtpEmail = async (email, otp) => {
   const htmlContent = PasswordResetOtpEmail(otp);
   const mailOptions = {
     from: '"Dental Clinic" <' + EMAIL_USER + ">",
@@ -32,5 +22,3 @@ const sendResetOtpEmail = async (email, otp) => {
 
   return true;
 };
-
-module.exports = { sendEmail, sendResetOtpEmail };
